@@ -11,7 +11,7 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-include { PETRIM; BWA; FLAGSTAT } from "processes.nf"
+include { PETRIM; BWA; FLAGSTAT; MERGEMD; XYRAT } from "processes.nf"
 params.raws="/lustre/isaac24/proj/UTK0204/lmajeres/ihvc_cattle/raw"
 
  /*=============================
@@ -82,7 +82,7 @@ workflow{
     }
     BWA(align_in)
 
-    // QC collection for file pairs
+    // QC collection for file pairs ** TODO: Test if this works
     FLAGSTAT(BWA.out.fs_in)
     trim_qc = PETRIM.out.tstat.map { SEQ, tstat_file, lane ->
         def stats = tstat_file.text // get file
@@ -105,9 +105,8 @@ workflow{
         ]
         return [key, qc_data]
     }
-    flagstat_qc = FLAGSTAT.out.stats.map { SEQ, flagstat_file, lane ->
-        def stats = flagstat_file.text
-        def num_aligned_reads = (stats =~ /(\d+) \+ \d+ primary mapped/)[0][1] as Integer
+    flagstat_qc = FLAGSTAT.out.fs.map { SEQ, flagstat_file, lane ->
+        def num_aligned_reads = (flagstat_file.text =~ /(\d+) \+ \d+ primary mapped/)[0][1] as Integer
         def key = "${SEQ.sample_id}_${SEQ.seq}_${lane}"
         def qc_data = [num_aligned_reads: num_aligned_reads]
         return [key, qc_data]
@@ -127,8 +126,17 @@ workflow{
     }
 
     // Now we bring things to sample-level
+    merge_in = BWA.out.bams.map { SEQ, bam_paths -> 
+            def samp = SEQ.sample_id
+            return [SEQ, samp, bam_paths]
+        }
+        .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
+    MERGEMD(merge_in) // need to get mdstats
+    XYRAT(MERGEMD.out.mdbam) // also get sex ratio & sex calls
+    DEEPVARIANT(XYRAT.out.sexed_bam)
 
-    // Outputs
+
+    // Outputs ** PUBLISH: Run-level bams (in-case there is an issue, since we aren't doing auto-qc), sample-level MD bams, gvcfs, final bcf, qc csv(s)
     publish:
 
 }

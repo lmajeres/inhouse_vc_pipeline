@@ -26,7 +26,7 @@ process BWA {
     tuple val(SEQ), val(seq), val(samp), path(trim_pair), path(trim_fwd), path(trim_rev), val(lane)
 
     output:
-    tuple val(SEQ), path("*.bam"), val(lane) emit: bams
+    tuple val(SEQ), path("*.bam") emit: bams
     tuple val(SEQ), val(seq), path("*P.bam"), val(lane) emit: fs_in
     
     script:
@@ -65,10 +65,91 @@ process FLAGSTAT {
     tuple val(SEQ), val(seq), path(pair_bam), val(lane)
 
     output:
-    tuple val(SEQ), path("*.flagstat"), val(lane)
+    tuple val(SEQ), path("*.flagstat"), val(lane) emit: fs
 
     script:
     """
     samtools flagstat -@ ${task.cpus} ${pair_bam} > ${seq}_L${lane}.flagstat
+    """
+}
+
+process MERGEMD {
+    cpus = params.threads_merge
+    input:
+    tuple val(SEQ), val(samp), path(bams)
+
+    output:
+    tuple val(samp), path("*MD.bam") emit: mdbam
+    tuple val(samp), path("*MD.stat") emit: mdstat
+
+    script:
+    """
+    samtools merge -@ ${task.cpus} -o - ${bams} |
+    samtools markdup -@ ${task.cpus} -S -d 2500 \
+    -s -f ${samp}_MD.stat - ${samp}_MD.bam
+    """
+}
+
+process XYRAT {
+    cpus = params.threads_xy
+    input:
+    tuple val(samp), path(mdbam)
+    
+    output:
+    tuple val(samp), path(mdbam), env(SEX_CALL) emit: sexed_bam
+    tuple val(samp), env(SEX_CALL), env(RATIO) emit: sex_qc
+    
+    script:
+    """
+    samtools index ${mdbam}
+    samtools idxstats ${mdbam} | grep 'NC' > tmp.idxstat
+    x=\$(grep 'NC_037357' tmp.idxstat | cut -f 3 || echo 0)
+    y=\$(grep 'NC_082638' tmp.idxstat | cut -f 3 || echo 0)
+    
+    xd=\$(echo "scale=3; \${x}*150/139009144" | bc -l)
+    yd=\$(echo "scale=3; \${y}*150/59476289" | bc -l)
+    
+    if (( \$(echo "\$yd > 0" | bc -l) )); then
+        RATIO=\$(echo "scale=3; \${xd}/\${yd}" | bc -l)
+    else
+        if (( \$(echo "\$xd > 0" | bc -l) )); then
+            RATIO="999"  # X coverage present, Y absent - likely female, assigning arbitrarily high ratio
+        else
+            RATIO="0"    # Both zero - potential QC issue
+        fi
+    fi
+
+    if (( $(echo "\$RATIO > 30" | bc -l) )); then
+        SEX_CALL="FEMALE"
+    elif (( $(echo "\$RATIO < 15 && \$RATIO > 0.5" | bc -l) )); then
+        SEX_CALL="MALE"
+    else
+        SEX_CALL="UNDETERMINED" # includes between 15 and 30 (ambiguous) and < 0.5 (likely qual issue)
+    fi
+    """
+}
+
+process DEEPVARIANT {
+    cpus = params.threads_dv
+    memory = params.mem_dv
+    input:
+    tuple val(samp), path(mdbam), val(sex)
+
+    output:
+    tuple val(samp), 
+
+    script:
+    """
+    singularity exec --cleanenv ~/tools/deepvariant_latest.sif \
+    run_deepvariant \
+    --model_type=WGS \
+    --vcf_stats_report=true \
+    --postprocess_cpus=0 \
+    --make_examples_extra_args='small_model_call_multiallelics=false' \
+    --ref=/lustre/isaac24/proj/UTK0204/lmajeres/tools/GCF_Bos_taurus_ref/GCF_002263795.3_ARS-UCD2.0_genomic.fna \
+    --reads=${mdbam} \
+    --output_vcf=${samp}.vcf.gz \
+    --output_gvcf=${samp}.g.vcf.gz \
+    --num_shards=${task.cpus}
     """
 }

@@ -14,7 +14,7 @@ process PETRIM {
 	-summary ${seq}_L${lane}.tstat \
 	${fastqs} \
 	-baseout ${seq}_L${lane}_t.fastq.gz \
-	HEADCROP:1 ILLUMINACLIP:/nfs/home/lmajeres/tools/adapters.fa:2:30:10 \
+	HEADCROP:1 ILLUMINACLIP:${params.adapters}:2:30:10 \
     LEADING:20 SLIDINGWINDOW:15:20 MINLEN:75
 	"""
 }
@@ -103,8 +103,8 @@ process XYRAT {
     """
     samtools index ${mdbam}
     samtools idxstats ${mdbam} | grep 'NC' > tmp.idxstat
-    x=\$(grep 'NC_037357' tmp.idxstat | cut -f 3 || echo 0)
-    y=\$(grep 'NC_082638' tmp.idxstat | cut -f 3 || echo 0)
+    x=\$(grep '${params.x_chr}' tmp.idxstat | cut -f 3 || echo 0)
+    y=\$(grep '${params.y_chr}' tmp.idxstat | cut -f 3 || echo 0)
     
     xd=\$(echo "scale=3; \${x}*150/139009144" | bc -l)
     yd=\$(echo "scale=3; \${y}*150/59476289" | bc -l)
@@ -136,20 +136,55 @@ process DEEPVARIANT {
     tuple val(samp), path(mdbam), val(sex)
 
     output:
-    tuple val(samp), 
+    path("*.g.vcf.gz") emit: gvcf
+    tuple val(samp), path("*.html") emit: vcf_stat
 
     script:
     """
+    if [ "${sex}" == "MALE" ]; then
+        REGIONS="${params.autosomes} ${params.x_chr} ${params.y_chr}"
+        HAPLOID_FLAG="--haploid_contigs=${params.x_chr},${params.y_chr}"
+    elif [ "${sex}" == "FEMALE" ]; then
+        REGIONS="${params.autosomes} ${params.x_chr}"
+        HAPLOID_FLAG=""
+    else
+        REGIONS="${params.autosomes}"
+        HAPLOID_FLAG=""
+    fi
+
     singularity exec --cleanenv ~/tools/deepvariant_latest.sif \
     run_deepvariant \
     --model_type=WGS \
     --vcf_stats_report=true \
     --postprocess_cpus=0 \
     --make_examples_extra_args='small_model_call_multiallelics=false' \
-    --ref=/lustre/isaac24/proj/UTK0204/lmajeres/tools/GCF_Bos_taurus_ref/GCF_002263795.3_ARS-UCD2.0_genomic.fna \
+    --ref=${params.dvRef} \
+    --regions=\${REGIONS} \
     --reads=${mdbam} \
     --output_vcf=${samp}.vcf.gz \
     --output_gvcf=${samp}.g.vcf.gz \
-    --num_shards=${task.cpus}
+    --num_shards=${task.cpus} \
+    \$HAPLOID_FLAG
+    """
+}
+
+process GLNEXUS {
+    cpus = params.threads_glnex
+    mem = params.mem_glnex
+    input:
+    path(manifest)
+
+    output:
+    path("*.bcf") emit: bcf
+
+    script:
+    """
+    singularity exec --cleanenv ~/tools/glnexus_v1.4.1.sif \
+    glnexus_cli \
+    -t ${task.cpus} \
+    -m ${params.budg_glnex} \
+    -l ${manifest} \
+    -a -c DeepVariant \
+    ${params.out}.bcf
     """
 }

@@ -11,7 +11,7 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-include { PETRIM; BWA; FLAGSTAT; MERGEMD; XYRAT } from "processes.nf"
+include { * } from "processes.nf"
 params.raws="/lustre/isaac24/proj/UTK0204/lmajeres/ihvc_cattle/raw"
 
  /*=============================
@@ -131,14 +131,14 @@ workflow{
             return [SEQ, samp, bam_paths]
         }
         .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
-    MERGEMD(merge_in) // need to get mdstats
-    XYRAT(MERGEMD.out.mdbam) // also get sex ratio & sex calls
-    DEEPVARIANT(XYRAT.out.sexed_bam)
-
+    MERGEMD(merge_in) // **TODO: need to get mdstats
+    XYRAT(MERGEMD.out.mdbam) // ** also get sex ratio & sex calls
+    DEEPVARIANT(XYRAT.out.sexed_bam) // ** collect vcf htmls ....
+    gvcf_manifest = DEEPVARIANT.out.gvcf.collectFile(name: 'gvcf_manifest.txt', newLine: true)
+    GLNEXUS(gvcf_manifest)
 
     // Outputs ** PUBLISH: Run-level bams (in-case there is an issue, since we aren't doing auto-qc), sample-level MD bams, gvcfs, final bcf, qc csv(s)
     publish:
-
 }
 
 output{

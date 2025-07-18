@@ -12,7 +12,6 @@ import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
 include { * } from "processes.nf"
-params.raws="/lustre/isaac24/proj/UTK0204/lmajeres/ihvc_cattle/raw"
 
  /*=============================
 /   Classes and Functions     /
@@ -55,7 +54,7 @@ def PARSE(csv) {
 workflow{
     main:
     // Starts at run-level (multiple possible sequencing runs/libraries per sample, but doesn't consider technical reps (ie lanes))
-    SEQlist = PARSE(${params.input_csv}) // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
+    SEQlist = PARSE(${params.in_csv}) // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
 
     // Fetch lanes
     raw_pairs = Channel.fromList(SEQlist)
@@ -92,11 +91,11 @@ workflow{
         def fwd_pct = (stats =~ /Forward Only Surviving Read Percent: ([\d.]+)/)[0][1] as Double
         def rev_pct = (stats =~ /Reverse Only Surviving Read Percent: ([\d.]+)/)[0][1] as Double
         // construct hashmap
-        def key = "${SEQ.sample_id}_${SEQ.seq}_${lane}"
+        def key = "${SEQ.sample_id}_${SEQ.raw_seq_id}_${lane}"
         def qc_data = [
             sample: SEQ.sample_id,
             group: SEQ.group,
-            run: SEQ.seq,
+            run: SEQ.raw_seq_id,
             lane: lane,
             paired_survival_pct: both_surv_pct,
             r1_only_survival_pct: fwd_pct,
@@ -107,22 +106,14 @@ workflow{
     }
     flagstat_qc = FLAGSTAT.out.fs.map { SEQ, flagstat_file, lane ->
         def num_aligned_reads = (flagstat_file.text =~ /(\d+) \+ \d+ primary mapped/)[0][1] as Integer
-        def key = "${SEQ.sample_id}_${SEQ.seq}_${lane}"
+        def key = "${SEQ.sample_id}_${SEQ.raw_seq_id}_${lane}"
         def qc_data = [num_aligned_reads: num_aligned_reads]
         return [key, qc_data]
     }
-    combined_qc = trim_qc.join(flagstat_qc).map { key, trim_data, flagstat_data ->
+    file_qc = trim_qc.join(flagstat_qc).map { key, trim_data, flagstat_data ->
         def merged_data = trim_data + flagstat_data // merge hashmaps
         merged_data.aligned_pct = (merged_data.num_aligned_reads / 2) / merged_data.num_trim_pairs // calculate alignment rate
         return [key, merged_data] // new hashmap
-    }
-    combined_qc.collectFile(
-        name: 'trim_align_qc.csv',
-        newLine: true,
-        storeDir: params.outdir,
-        sort: true
-    ) { key, data ->
-        "${data.sample},${data.run},${data.lane},${data.paired_survival_pct},${data.r1_only_survival_pct},${data.r2_only_survival_pct},${data.num_trim_pairs},${data.aligned_pct},${data.num_aligned_reads}"
     }
 
     // Now we bring things to sample-level
@@ -131,16 +122,94 @@ workflow{
             return [SEQ, samp, bam_paths]
         }
         .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
-    MERGEMD(merge_in) // **TODO: need to get mdstats
-    XYRAT(MERGEMD.out.mdbam) // ** also get sex ratio & sex calls
-    DEEPVARIANT(XYRAT.out.sexed_bam) // ** collect vcf htmls ....
+    MERGEMD(merge_in)
+    XYRAT(MERGEMD.out.mdbam)
+    DEEPVARIANT(XYRAT.out.sexed_bam)
     gvcf_manifest = DEEPVARIANT.out.gvcf.collectFile(name: 'gvcf_manifest.txt', newLine: true)
     GLNEXUS(gvcf_manifest)
 
-    // Outputs ** PUBLISH: Run-level bams (in-case there is an issue, since we aren't doing auto-qc), sample-level MD bams, gvcfs, final bcf, qc csv(s)
+    // QC collection for sample-level
+    md_qc = MERGEMD.out.mdstat.map { samp, mdstat_file ->
+        def stats = mdtstat_file.text // get file
+        // extract info
+        def exam = (stats =~ /EXAMINED: (\d+)/)[0][1] as Integer
+        def cover = (exam*150)/2770669782
+        def dups = (stats =~ /DUPLICATE TOTAL: (\d+)/)[0][1] as Integer
+        def dup_rate = dups/exam
+        def lib_size = (stats =~ /ESTIMATED_LIBRARY_SIZE: (\d+)/)[0][1] as Integer
+        // construct hashmap
+        def qc_data = [
+            sample: samp,
+            coverage: cover,
+            dup_pct: dup_rate,
+            est_lib_size: lib_size
+        ]
+        return [samp, qc_data]
+    }
+    xy_qc = XYRAT.out.sex_qc.map { samp, sex_call, ratio ->
+        def qc_data = [
+            sex_called: sex_call
+            xy_ratio: ratio
+        ]
+        return [samp, qc_data]
+    }
+    samp1_qc = md_qc.join(xy_qc).map { samp, md_data, xy_data ->
+        def merge1_data = md_data + xy_data // merge hashmaps
+        return [samp, merge1_data] // new hashmap
+    }
+    PARSE_DVQC(DEEPVARIANT.out.vcf_stat)
+    dv_qc = PARSE_DVQC.out.json.map { samp, json_file ->
+        def stats_text = json_file.text
+        def stats = new groovy.json.JsonSlurper().parseText(stats_text)
+        // construct hashmap
+        def qc_data = [
+            total_variants: stats.total_variants,
+            refcall_variants: stats.refcall_variants,
+            nonrefcall_variants: stats.nonrefcall_variants,
+            pct_refcall: stats.pct_refcall,
+            titv_ratio: stats.titv_ratio,
+            mean_gq: stats.mean_gq,
+            median_gq: stats.median_gq,
+            pct_gq_gt10: stats.pct_gq_gt10,
+            pct_gq_gt20: stats.pct_gq_gt20,
+            pct_gq_gt30: stats.pct_gq_gt30
+        ]
+        return [samp, qc_data]
+    }
+    samp2_qc = samp1_qc.join(dv_qc).map { key, merge1_data, dv_data ->
+        def merge2_data = merge1_data + dv_data
+        return [samp, merge2_data]
+    }
+    // Outputs ** PUBLISH: Run-level bams (in-case there is an issue, since we aren't doing auto-qc), sample-level MD bams, gvcfs, final bcf, qc csvs
+    // run bams, sample bams, and gvcfs should perhaps live in scratch? Maybe ask Trevor about if I can keep the gvcfs somewhere more permanent
+    // final bcf and csvs can be returned in main directory.
+    // instead of doing collectfile, make an index file from the hashmap?
     publish:
+        unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
+        final_bams = MERGEMD.out.mdbam // [sample_id, path(mdbam)]
+        gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
+        bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
+        run_qc = file_qc_qc.map { SEQ, qc -> return qc} // hashmap indexed by run, lane, sample
+        samp_qc = samp2_qc.map { samp, qc -> return qc} // hashmap indexed by sample
 }
 
 output{
+    unmerged_bams {
 
+    }
+    final_bams {
+
+    }
+    gvcfs {
+
+    }
+    bcf {
+        
+    }
+    run_qc {
+
+    }
+    sampf_qc {
+
+    }
 }

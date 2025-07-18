@@ -36,7 +36,7 @@ process BWA {
     bwa-mem2 mem \
     -R "\${RG}" \
     -t ${task.cpus} \
-    ${params.bwaIndex} \
+    ${params.bwa_index} \
     ${trim_pair} |
     samtools collate -@ ${task.cpus} -O -u - |
     samtools fixmate -@ ${task.cpus} -m -u - - |
@@ -46,14 +46,14 @@ process BWA {
     bwa-mem2 mem \
     -R "\${RG}" \
     -t ${task.cpus} \
-    ${params.bwaIndex} \
+    ${params.bwa_index} \
     ${trim_fwd} |
     samtools sort -@ ${task.cpus} -u - ${seq}_L${lane}_1U.bam
 
     bwa-mem2 mem \
     -R "\${RG}" \
     -t ${task.cpus} \
-    ${params.bwaIndex} \
+    ${params.bwa_index} \
     ${trim_rev} |
     samtools sort -@ ${task.cpus} -u - ${seq}_L${lane}_2U.bam
     """
@@ -158,7 +158,7 @@ process DEEPVARIANT {
     --vcf_stats_report=true \
     --postprocess_cpus=0 \
     --make_examples_extra_args='small_model_call_multiallelics=false' \
-    --ref=${params.dvRef} \
+    --ref=${params.dv_ref} \
     --regions=\${REGIONS} \
     --reads=${mdbam} \
     --output_vcf=${samp}.vcf.gz \
@@ -185,6 +185,20 @@ process GLNEXUS {
     -m ${params.budg_glnex} \
     -l ${manifest} \
     -a -c DeepVariant \
-    ${params.out}.bcf
+    ${params.out_name}.bcf
+    """
+}
+
+process PARSE_DVQC {
+    cpus = params.threads_dvqc
+    input:
+    val(samp), path(html)
+
+    output:
+    tuple val(samp), path("*.json") emit: json
+
+    script:
+    """
+    python ${params.dv_qc_parser} --input ${html} --output ${samp}.json
     """
 }

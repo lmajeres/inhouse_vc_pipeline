@@ -1,1 +1,8 @@
 *.html
+0_qc/
+failed/
+raw/
+notes.txt
+slurm*
+*.qsh
+.nextflow*

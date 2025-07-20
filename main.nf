@@ -54,7 +54,7 @@ def PARSE(csv) {
 workflow{
     main:
     // Starts at run-level (multiple possible sequencing runs/libraries per sample, but doesn't consider technical reps (ie lanes))
-    SEQlist = PARSE(${params.in_csv}) // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
+    SEQlist = PARSE(${params.inCsv}) // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
 
     // Fetch lanes
     raw_pairs = Channel.fromList(SEQlist)
@@ -195,21 +195,29 @@ workflow{
 
 output{
     unmerged_bams {
-
+        path "${params.outputScratch}/unmerged_bams"
     }
     final_bams {
-
+        path "${params.outputScratch}/md_bams"
     }
     gvcfs {
-
+        path "${params.outputScratch}/gvcfs"
     }
     bcf {
-        
+        path "${params.outputDir}"
     }
     run_qc {
-
+       path "${params.outputDir}"
+       index { 
+        path "${params.outName}_runqc.csv"
+        header true
+       }
     }
-    sampf_qc {
-
+    samp_qc {
+        path "${params.outputDir}"
+        index { 
+            path "${params.outName}_sampqc.csv"
+            header true
+       }
     }
 }

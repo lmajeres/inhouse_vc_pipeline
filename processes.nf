@@ -1,22 +1,22 @@
 process PETRIM {
-	cpus = params.threads_trim
-	input:
-	tuple val(SEQ), val(seq), path(fastqs), val(lane)
-	
-	output:
-	tuple val(SEQ), path("*_t_*P.fastq.gz"), path("*_t_1U.fastq.gz"), path("*_t_2U.fastq.gz"), val(lane) emit: trims
-	tuple val(SEQ), path("*.tstat"), val(lane) emit: tstat
-	
-	script:
-	"""	
-	trimmomatic PE \
-	-threads ${task.cpus} \
-	-summary ${seq}_L${lane}.tstat \
-	${fastqs} \
-	-baseout ${seq}_L${lane}_t.fastq.gz \
-	HEADCROP:1 ILLUMINACLIP:${params.adapters}:2:30:10 \
+    cpus = params.threads_trim
+    input:
+    tuple val(SEQ), val(seq), path(fastqs), val(lane)
+        
+    output:
+    tuple val(SEQ), path("*_t_*P.fastq.gz"), path("*_t_1U.fastq.gz"), path("*_t_2U.fastq.gz"), val(lane), emit: trims
+    tuple val(SEQ), path("*.tstat"), val(lane), emit: tstat
+        
+    script:
+    """
+    trimmomatic PE \
+    -threads ${task.cpus} \
+    -summary ${seq}_L${lane}.tstat \
+    ${fastqs} \
+    -baseout ${seq}_L${lane}_t.fastq.gz \
+    HEADCROP:1 ILLUMINACLIP:${params.adapters}:2:30:10 \
     LEADING:20 SLIDINGWINDOW:15:20 MINLEN:75
-	"""
+    """
 }
 
 process BWA {
@@ -26,8 +26,8 @@ process BWA {
     tuple val(SEQ), val(seq), val(samp), path(trim_pair), path(trim_fwd), path(trim_rev), val(lane)
 
     output:
-    tuple val(SEQ), path("*.bam") emit: bams
-    tuple val(SEQ), val(seq), path("*P.bam"), val(lane) emit: fs_in
+    tuple val(SEQ), path("*.bam"), emit: bams
+    tuple val(SEQ), val(seq), path("*P.bam"), val(lane), emit: fs_in
     
     script:
     """
@@ -65,7 +65,7 @@ process FLAGSTAT {
     tuple val(SEQ), val(seq), path(pair_bam), val(lane)
 
     output:
-    tuple val(SEQ), path("*.flagstat"), val(lane) emit: fs
+    tuple val(SEQ), path("*.flagstat"), val(lane), emit: fs
 
     script:
     """
@@ -79,8 +79,8 @@ process MERGEMD {
     tuple val(SEQ), val(samp), path(bams)
 
     output:
-    tuple val(samp), path("*MD.bam") emit: mdbam
-    tuple val(samp), path("*MD.stat") emit: mdstat
+    tuple val(samp), path("*MD.bam"), emit: mdbam
+    tuple val(samp), path("*MD.stat"), emit: mdstat
 
     script:
     """
@@ -96,8 +96,8 @@ process XYRAT {
     tuple val(samp), path(mdbam)
     
     output:
-    tuple val(samp), path(mdbam), env(SEX_CALL) emit: sexed_bam
-    tuple val(samp), env(SEX_CALL), env(RATIO) emit: sex_qc
+    tuple val(samp), path(mdbam), env(SEX_CALL), emit: sexed_bam
+    tuple val(samp), env(SEX_CALL), env(RATIO), emit: sex_qc
     
     script:
     """
@@ -136,8 +136,8 @@ process DEEPVARIANT {
     tuple val(samp), path(mdbam), val(sex)
 
     output:
-    path("*.g.vcf.gz") emit: gvcf
-    tuple val(samp), path("*.html") emit: vcf_stat
+    path("*.g.vcf.gz"), emit: gvcf
+    tuple val(samp), path("*.html"), emit: vcf_stat
 
     script:
     """
@@ -175,7 +175,7 @@ process GLNEXUS {
     path(manifest)
 
     output:
-    path("*.bcf") emit: bcf
+    path("*.bcf"), emit: bcf
 
     script:
     """
@@ -195,7 +195,7 @@ process PARSE_DVQC {
     val(samp), path(html)
 
     output:
-    tuple val(samp), path("*.json") emit: json
+    tuple val(samp), path("*.json"), emit: json
 
     script:
     """

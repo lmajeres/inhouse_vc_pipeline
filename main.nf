@@ -180,16 +180,13 @@ workflow{
         def merge2_data = merge1_data + dv_data
         return [samp, merge2_data]
     }
-    // Outputs ** PUBLISH: Run-level bams (in-case there is an issue, since we aren't doing auto-qc), sample-level MD bams, gvcfs, final bcf, qc csvs
-    // run bams, sample bams, and gvcfs should perhaps live in scratch? Maybe ask Trevor about if I can keep the gvcfs somewhere more permanent
-    // final bcf and csvs can be returned in main directory.
-    // instead of doing collectfile, make an index file from the hashmap?
+
     publish:
     unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
     final_bams = MERGEMD.out.mdbam // [sample_id, path(mdbam)]
     gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
     bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
-    run_qc = file_qc.map { key, qc -> return qc} // hashmap indexed by run, lane, sample
+    run_qc = file_qc.map { key, qc -> return qc} // hashmap indexed by run_lane_sample
     samp_qc = samp2_qc.map { samp, qc -> return qc} // hashmap indexed by sample
 }
 

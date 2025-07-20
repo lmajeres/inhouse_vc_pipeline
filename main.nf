@@ -204,17 +204,17 @@ output{
         path "${params.outputScratch}/gvcfs"
     }
     bcf {
-        path "${params.outputDir}"
+        path "${outputDir}"
     }
     run_qc {
-       path "${params.outputDir}"
+       path "${outputDir}"
        index { 
         path "${params.outName}_runqc.csv"
         header true
        }
     }
     samp_qc {
-        path "${params.outputDir}"
+        path "${outputDir}"
         index { 
             path "${params.outName}_sampqc.csv"
             header true

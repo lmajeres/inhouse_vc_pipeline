@@ -195,34 +195,34 @@ workflow{
 output{
     unmerged_bams {
         path "unmerged_bams"
-	mode 'symlink'
+	    mode 'symlink'
     }
     final_bams {
         path "md_bams"
-	mode 'symlink'
+	    mode 'symlink'
     }
     gvcfs {
         path "gvcfs"
-	mode 'symlink'
+	    mode 'symlink'
     }
     bcf {
         path "."
-	mode 'move'
+	    mode 'move'
     }
     run_qc {
-	path "."
-	mode 'move'
-	index {
-		path "${params.outName}_runqc.csv"
-		header true
-	}
+	    path "."
+	    mode 'move'
+	    index {
+		    path "${params.outName}_runqc.csv"
+		    header true
+	    }
     }
     samp_qc {
         path "."
-	mode 'move'
+	    mode 'move'
         index {
-		path "${params.outName}_sampqc.csv"
-		header true
-       }
+		    path "${params.outName}_sampqc.csv"
+		    header true
+            }
     }
 }

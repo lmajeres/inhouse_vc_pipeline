@@ -40,22 +40,21 @@ process BWA {
     ${trim_pair} |
     samtools collate -@ ${task.cpus} -O -u - |
     samtools fixmate -@ ${task.cpus} -m -u - - |
-    samtools sort -@ ${task.cpus} -u - ${seq}_L${lane}_P.bam
-
+    samtools sort -@ ${task.cpus} -o ${seq}_L${lane}_P.bam
 
     bwa-mem2 mem \
     -R "\${RG}" \
     -t ${task.cpus} \
     ${params.bwaIndex} \
     ${trim_fwd} |
-    samtools sort -@ ${task.cpus} -u - ${seq}_L${lane}_1U.bam
+    samtools sort -@ ${task.cpus} -o ${seq}_L${lane}_1U.bam
 
     bwa-mem2 mem \
     -R "\${RG}" \
     -t ${task.cpus} \
     ${params.bwaIndex} \
     ${trim_rev} |
-    samtools sort -@ ${task.cpus} -u - ${seq}_L${lane}_2U.bam
+    samtools sort -@ ${task.cpus} -o ${seq}_L${lane}_2U.bam
     """
 }
 
@@ -84,7 +83,7 @@ process MERGEMD {
 
     script:
     """
-    samtools merge -@ ${task.cpus} -o - ${bams} |
+    samtools merge -@ ${task.cpus} -u -o - ${bams} |
     samtools markdup -@ ${task.cpus} -S -d 2500 \
     -s -f ${samp}_MD.stat - ${samp}_MD.bam
     """

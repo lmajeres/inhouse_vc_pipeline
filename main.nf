@@ -11,6 +11,8 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
+nextflow.preview.output = true
+
 include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PARSE_DVQC } from './processes.nf'
 
  /*=============================
@@ -192,29 +194,35 @@ workflow{
 
 output{
     unmerged_bams {
-        path "${params.outputScratch}/unmerged_bams"
+        path "unmerged_bams"
+	mode 'symlink'
     }
     final_bams {
-        path "${params.outputScratch}/md_bams"
+        path "md_bams"
+	mode 'symlink'
     }
     gvcfs {
-        path "${params.outputScratch}/gvcfs"
+        path "gvcfs"
+	mode 'symlink'
     }
     bcf {
-        path "${outputDir}"
+        path "."
+	mode 'move'
     }
     run_qc {
-       path "${outputDir}"
-       index { 
-        path "${params.outName}_runqc.csv"
-        header true
-       }
+	path "."
+	mode 'move'
+	index {
+		path "${params.outName}_runqc.csv"
+		header true
+	}
     }
     samp_qc {
-        path "${outputDir}"
-        index { 
-            path "${params.outName}_sampqc.csv"
-            header true
+        path "."
+	mode 'move'
+        index {
+		path "${params.outName}_sampqc.csv"
+		header true
        }
     }
 }

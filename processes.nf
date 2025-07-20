@@ -119,9 +119,9 @@ process XYRAT {
         fi
     fi
 
-    if (( $(echo "\$RATIO > 30" | bc -l) )); then
+    if (( \$(echo "\$RATIO > 30" | bc -l) )); then
         SEX_CALL="FEMALE"
-    elif (( $(echo "\$RATIO < 15 && \$RATIO > 0.5" | bc -l) )); then
+    elif (( \$(echo "\$RATIO < 15 && \$RATIO > 0.5" | bc -l) )); then
         SEX_CALL="MALE"
     else
         SEX_CALL="UNDETERMINED" # includes between 15 and 30 (ambiguous) and < 0.5 (likely qual issue)
@@ -192,7 +192,7 @@ process GLNEXUS {
 process PARSE_DVQC {
     cpus = params.threads_dvqc
     input:
-    val(samp), path(html)
+    tuple val(samp), path(html)
 
     output:
     tuple val(samp), path("*.json"), emit: json

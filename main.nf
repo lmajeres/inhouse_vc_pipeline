@@ -11,7 +11,7 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-include { * } from "processes.nf"
+include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PARSE_DVQC } from './processes.nf'
 
  /*=============================
 /   Classes and Functions     /
@@ -54,7 +54,7 @@ def PARSE(csv) {
 workflow{
     main:
     // Starts at run-level (multiple possible sequencing runs/libraries per sample, but doesn't consider technical reps (ie lanes))
-    SEQlist = PARSE(${params.inCsv}) // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
+    SEQlist = PARSE("${params.inCsv}") // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
 
     // Fetch lanes
     raw_pairs = Channel.fromList(SEQlist)
@@ -75,7 +75,7 @@ workflow{
     // Begin processing file pairs
     PETRIM(raw_pairs)
     align_in = PETRIM.out.trims.map { SEQ, trim_pair, trim_fwd, trim_rev, lane ->
-        def seq = SEQ.raw_sed_id
+        def seq = SEQ.raw_seq_id
         def samp = SEQ.sample_id
         return [SEQ, seq, samp, trim_pair, trim_fwd, trim_rev, lane]
     }
@@ -130,7 +130,7 @@ workflow{
 
     // QC collection for sample-level
     md_qc = MERGEMD.out.mdstat.map { samp, mdstat_file ->
-        def stats = mdtstat_file.text // get file
+        def stats = mdstat_file.text // get file
         // extract info
         def exam = (stats =~ /EXAMINED: (\d+)/)[0][1] as Integer
         def cover = (exam*150)/2770669782
@@ -148,7 +148,7 @@ workflow{
     }
     xy_qc = XYRAT.out.sex_qc.map { samp, sex_call, ratio ->
         def qc_data = [
-            sex_called: sex_call
+            sex_called: sex_call,
             xy_ratio: ratio
         ]
         return [samp, qc_data]
@@ -176,7 +176,7 @@ workflow{
         ]
         return [samp, qc_data]
     }
-    samp2_qc = samp1_qc.join(dv_qc).map { key, merge1_data, dv_data ->
+    samp2_qc = samp1_qc.join(dv_qc).map { samp, merge1_data, dv_data ->
         def merge2_data = merge1_data + dv_data
         return [samp, merge2_data]
     }
@@ -185,12 +185,12 @@ workflow{
     // final bcf and csvs can be returned in main directory.
     // instead of doing collectfile, make an index file from the hashmap?
     publish:
-        unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
-        final_bams = MERGEMD.out.mdbam // [sample_id, path(mdbam)]
-        gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
-        bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
-        run_qc = file_qc_qc.map { SEQ, qc -> return qc} // hashmap indexed by run, lane, sample
-        samp_qc = samp2_qc.map { samp, qc -> return qc} // hashmap indexed by sample
+    unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
+    final_bams = MERGEMD.out.mdbam // [sample_id, path(mdbam)]
+    gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
+    bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
+    run_qc = file_qc.map { key, qc -> return qc} // hashmap indexed by run, lane, sample
+    samp_qc = samp2_qc.map { samp, qc -> return qc} // hashmap indexed by sample
 }
 
 output{

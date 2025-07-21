@@ -119,9 +119,9 @@ workflow{
     }
 
     // Now we bring things to sample-level
-    merge_in = BWA.out.bams.map { SEQ, bam_paths -> 
+    merge_in = BWA.out.bams.map { SEQ, bam_p, bam_1u, bam_2u -> 
             def samp = SEQ.sample_id
-            return [SEQ, samp, bam_paths]
+            return [SEQ, samp, bam_p, bam_1u, bam_2u]
         }
         .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
     MERGEMD(merge_in)

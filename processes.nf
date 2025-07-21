@@ -26,7 +26,7 @@ process BWA {
     tuple val(SEQ), val(seq), val(samp), path(trim_pair), path(trim_fwd), path(trim_rev), val(lane)
 
     output:
-    tuple val(SEQ), path("*.bam"), emit: bams
+    tuple val(SEQ), path("*P.bam"), path("*1U.bam"), path("*2U.bam"), emit: bams
     tuple val(SEQ), val(seq), path("*P.bam"), val(lane), emit: fs_in
     
     script:
@@ -75,7 +75,7 @@ process FLAGSTAT {
 process MERGEMD {
     cpus = params.threads_merge
     input:
-    tuple val(SEQ), val(samp), path(bams)
+    tuple val(SEQ), val(samp), path(bam_p), path(bam_1u), path(bam_2u)
 
     output:
     tuple val(samp), path("*MD.bam"), emit: mdbam
@@ -83,7 +83,7 @@ process MERGEMD {
 
     script:
     """
-    samtools merge -@ ${task.cpus} -u -o - ${bams} |
+    samtools merge -@ ${task.cpus} -u -o - ${bam_p} ${bam_1u} ${bam_2u} |
     samtools markdup -@ ${task.cpus} -S -d 2500 \
     -s -f ${samp}_MD.stat - ${samp}_MD.bam
     """

@@ -95,12 +95,12 @@ process XYRAT {
     tuple val(samp), path(mdbam)
     
     output:
-    tuple val(samp), path(mdbam), env(SEX_CALL), emit: sexed_bam
+    tuple val(samp), path(mdbam), path("*.bai"), env(SEX_CALL), emit: sexed_bam
     tuple val(samp), env(SEX_CALL), env(RATIO), emit: sex_qc
     
     script:
     """
-    samtools index ${mdbam}
+    samtools index -b ${mdbam}
     samtools idxstats ${mdbam} | grep 'NC' > tmp.idxstat
     x=\$(grep '${params.x_chr}' tmp.idxstat | cut -f 3 || echo 0)
     y=\$(grep '${params.y_chr}' tmp.idxstat | cut -f 3 || echo 0)
@@ -132,7 +132,7 @@ process DEEPVARIANT {
     cpus = params.threads_dv
     memory = params.mem_dv
     input:
-    tuple val(samp), path(mdbam), val(sex)
+    tuple val(samp), path(mdbam), path(index), val(sex)
 
     output:
     path("*.g.vcf.gz"), emit: gvcf

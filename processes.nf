@@ -118,12 +118,12 @@ process XYRAT {
         fi
     fi
 
-    if (( \$(echo "\$RATIO > 30" | bc -l) )); then
+    if (( \$(echo "\$RATIO > ${params.x_thresh}" | bc -l) )); then
         SEX_CALL="FEMALE"
-    elif (( \$(echo "\$RATIO < 15 && \$RATIO > 0.5" | bc -l) )); then
+    elif (( \$(echo "\$RATIO < ${params.y_thresh} && \$RATIO > 0.5" | bc -l) )); then
         SEX_CALL="MALE"
     else
-        SEX_CALL="UNDETERMINED" # includes between 15 and 30 (ambiguous) and < 0.5 (likely qual issue)
+        SEX_CALL="UNDETERMINED" # includes between X and Y (ambiguous) and < 0.5 (likely qual issue)
     fi
     """
 }

@@ -127,7 +127,8 @@ workflow{
     MERGEMD(merge_in)
     XYRAT(MERGEMD.out.mdbam)
     DEEPVARIANT(XYRAT.out.sexed_bam)
-    gvcf_manifest = DEEPVARIANT.out.gvcf.collectFile(name: 'gvcf_manifest.txt', newLine: true)
+    gvcf_manifest = DEEPVARIANT.out.gvcf.map { gvcf_path -> gvcf_path.toString() }
+        .collectFile(name: 'gvcf_manifest.txt', newLine: true)
     GLNEXUS(gvcf_manifest)
 
     // QC collection for sample-level
@@ -135,7 +136,7 @@ workflow{
         def stats = mdstat_file.text // get file
         // extract info
         def exam = (stats =~ /EXAMINED: (\d+)/)[0][1] as Integer
-        def cover = (exam*150)/2770669782
+        def cover = (exam*150.0)/${params.genome_size}
         def dups = (stats =~ /DUPLICATE TOTAL: (\d+)/)[0][1] as Integer
         def dup_rate = dups/exam
         def lib_size = (stats =~ /ESTIMATED_LIBRARY_SIZE: (\d+)/)[0][1] as Integer
@@ -185,7 +186,7 @@ workflow{
 
     publish:
     unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
-    final_bams = MERGEMD.out.mdbam // [sample_id, path(mdbam)]
+    final_bams = XYRAT.out.sexed_bam // [sample_id, path(mdbam), path(bai), sex call]
     gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
     bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
     run_qc = file_qc.map { key, qc -> return qc} // hashmap indexed by run_lane_sample

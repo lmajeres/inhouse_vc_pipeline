@@ -136,7 +136,7 @@ workflow{
         def stats = mdstat_file.text // get file
         // extract info
         def exam = (stats =~ /EXAMINED: (\d+)/)[0][1] as Integer
-        def cover = (exam*150.0)/${params.genome_size}
+        def cover = (exam*150.0)/params.genome_size
         def dups = (stats =~ /DUPLICATE TOTAL: (\d+)/)[0][1] as Integer
         def dup_rate = dups/exam
         def lib_size = (stats =~ /ESTIMATED_LIBRARY_SIZE: (\d+)/)[0][1] as Integer

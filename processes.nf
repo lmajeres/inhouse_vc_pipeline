@@ -158,7 +158,7 @@ process DEEPVARIANT {
     --postprocess_cpus=0 \
     --make_examples_extra_args='small_model_call_multiallelics=false' \
     --ref=${params.dvRef} \
-    --regions=\${REGIONS} \
+    --regions="\${REGIONS}" \
     --reads=${mdbam} \
     --output_vcf=${samp}.vcf.gz \
     --output_gvcf=${samp}.g.vcf.gz \
@@ -182,8 +182,8 @@ process GLNEXUS {
     glnexus_cli \
     -t ${task.cpus} \
     -m ${params.budg_glnex} \
-    -l ${manifest} \
-    -a -c DeepVariant > ${params.outName}.bcf
+    -a -c DeepVariant \
+    --list ${manifest} > ${params.outName}.bcf
     """
 }
 

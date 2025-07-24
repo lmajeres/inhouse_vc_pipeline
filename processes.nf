@@ -183,8 +183,7 @@ process GLNEXUS {
     -t ${task.cpus} \
     -m ${params.budg_glnex} \
     -l ${manifest} \
-    -a -c DeepVariant \
-    ${params.outName}.bcf
+    -a -c DeepVariant > ${params.outName}.bcf
     """
 }
 

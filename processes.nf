@@ -169,7 +169,7 @@ process DEEPVARIANT {
 
 process GLNEXUS {
     cpus = params.threads_glnex
-    mem = params.mem_glnex
+    memory = params.mem_glnex
     input:
     path(manifest)
 

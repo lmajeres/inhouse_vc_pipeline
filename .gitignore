@@ -2,7 +2,9 @@
 0_qc/
 failed/
 raw/
+outputs/
 notes.txt
 slurm*
 *.qsh
 .nextflow*
+*.csv

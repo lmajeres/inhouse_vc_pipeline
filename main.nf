@@ -10,6 +10,8 @@
 // Libraries
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
+import nextflow.io.ValueObject
+import nextflow.util.KryoHelper
 
 nextflow.preview.output = true
 
@@ -19,32 +21,34 @@ include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PA
 /   Classes and Functions     /
 ============================*/
 
+@ValueObject
 class SEQ {
     String raw_seq_id      // original file name
     String sample_id       // given sample id
     String group           // directory containing files
     Integer warn           // Count of warnings accrued; starts at 0 and counts up if WARN is triggered. Currently unused.
 
-    SEQ(String raw_seq_id, String sample_id, String group) {
-        this.raw_seq_id = raw_seq_id
-        this.sample_id  = sample_id
-        this.group = group
-        this.warn = 0
-    }
+//    SEQ(String raw_seq_id, String sample_id, String group) {
+//        this.raw_seq_id = raw_seq_id
+//        this.sample_id  = sample_id
+//        this.group = group
+//        this.warn = 0
+//    }
 
-    void flag() { this.warn += 1 }
+//    void flag() { this.warn += 1 }
 
-    String describe() {
-        return "SEQ(raw_seq_id=$raw_seq_id, sample_id=$sample_id, group=$group, warn=$warn)"
-    }
+//    String describe() {
+//        return "SEQ(raw_seq_id=$raw_seq_id, sample_id=$sample_id, group=$group, warn=$warn)"
+//    }
 }
+KryoHelper.register(SEQ)
 
 def PARSE(csv) {
     def out = []
     new File(csv).eachLine { line, index ->
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
-        out << new SEQ(info[0], info[1], info[2])
+        out << new SEQ(info[0], info[1], info[2], 0)
     }
     return out
 }
@@ -64,22 +68,22 @@ workflow{
             def r1s = file("${params.raws}/${SEQ.group}/${SEQ.raw_seq_id}_*_R1_001.fastq.gz")
             def lanes = r1s.collect { r1 ->
                 def match = (r1.name =~ /_L00(\d+)_R1_/)
-                def lane = match ? match[0][1] : "no_lane" }
+                def lane = match ? match[0][1] : "0" }
             return [SEQ, r1s, lanes]
         }
         .transpose() // Flatten from run level to file level
         .map { SEQ, r1, lane ->
             def r2 = file(r1.toString().replace('_R1_001.fastq.gz', '_R2_001.fastq.gz'))
             def seq = SEQ.raw_seq_id
-            return [SEQ, seq, [r1, r2], lane]
+            return [SEQ, seq, r1, r2, lane]
         }
 
     // Begin processing file pairs
     PETRIM(raw_pairs)
-    align_in = PETRIM.out.trims.map { SEQ, trim_pair, trim_fwd, trim_rev, lane ->
+    align_in = PETRIM.out.trims.map { SEQ, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane ->
         def seq = SEQ.raw_seq_id
         def samp = SEQ.sample_id
-        return [SEQ, seq, samp, trim_pair, trim_fwd, trim_rev, lane]
+        return [SEQ, seq, samp, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane]
     }
     BWA(align_in)
 
@@ -124,11 +128,23 @@ workflow{
             return [SEQ, samp, bam_p, bam_1u, bam_2u]
         }
         .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
+        .map { SEQ, samp, bam_p, bam_1u, bam_2u ->
+            def sort_p = bam_p.sort { a,b ->
+                a.name.compareTo(b.name)
+            }
+            def sort_1u = bam_1u.sort { a,b ->
+                a.name.compareTo(b.name)
+            }
+            def sort_2u = bam_2u.sort { a,b ->
+                a.name.compareTo(b.name)
+            }
+            return [samp, sort_p, sort_1u, sort_2u]      
+        }
     MERGEMD(merge_in)
     XYRAT(MERGEMD.out.mdbam)
     DEEPVARIANT(XYRAT.out.sexed_bam)
-    gvcf_manifest = DEEPVARIANT.out.gvcf.map { gvcf_path -> gvcf_path.toString() }
-        .collectFile(name: 'gvcf_manifest.txt', newLine: true)
+    gvcf_manifest = DEEPVARIANT.out.gvcf.map { gvcf_path, gvcf_index_path -> gvcf_path.toString() }
+        .collectFile(name: 'gvcf_manifest.txt', newLine: true) // We are unsure if this could cause a problem with resume but are going to not think about it right now :)
     GLNEXUS(gvcf_manifest)
 
     // QC collection for sample-level

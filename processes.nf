@@ -116,7 +116,7 @@ process FLAGSTAT {
 process MERGEMD {
     cpus = params.threads_merge
     input:
-    tuple val(SEQ), val(samp), path(bam_p), path(bam_1u), path(bam_2u)
+    val(samp), path(bam_p), path(bam_1u), path(bam_2u)
 
     output:
     tuple val(samp), path("${samp}_MD.bam"), emit: mdbam

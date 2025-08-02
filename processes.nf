@@ -229,6 +229,7 @@ process DEEPVARIANT {
     --ref=${params.dvRef} \
     --regions="\${REGIONS}" \
     --reads=${mdbam} \
+    --intermediate_results_dir \${TMPDIR} \
     --output_vcf=${samp}.vcf.gz \
     --output_gvcf=${samp}.g.vcf.gz \
     --num_shards=${task.cpus} \

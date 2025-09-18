@@ -193,6 +193,9 @@ process XYRAT {
     """
 }
 
+// Add error handling (retry and add more mem) for DEEPVARIANT process
+// Possibly add metadata option to start w/ more mem for samples expected to be very different from ref.
+
 process DEEPVARIANT {
     cpus = params.threads_dv
     memory = params.mem_dv
@@ -260,7 +263,7 @@ process DEEPVARIANT {
 process GLNEXUS {
     cpus = params.threads_glnex
     memory = params.mem_glnex
-    clusterOptions = '--nodelist=clrv1203'
+//  clusterOptions = '--nodelist=clrv1203' // This doesn't work
     input:
     path(manifest)
 

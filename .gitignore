@@ -8,4 +8,4 @@ slurm*
 *.qsh
 .nextflow*
 *.csv
-~$WGS_info.xlsx
+*.xlsx

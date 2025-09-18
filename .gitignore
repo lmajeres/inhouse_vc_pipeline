@@ -9,3 +9,4 @@ slurm*
 .nextflow*
 *.csv
 *.xlsx
+.vscode/

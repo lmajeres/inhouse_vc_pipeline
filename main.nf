@@ -77,13 +77,13 @@ workflow{
         }
 
     // Begin processing file pairs
-    PETRIM(raw_pairs)
-    align_in = PETRIM.out.trims.map { META, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane ->
+    PETRIM(rawPairs)
+    alignIn = PETRIM.out.trims.map { META, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane ->
         def seq = META.seq_file
         def samp = META.sample_id
         return [META, seq, samp, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane]
     }
-    BWA(align_in)
+    BWA(alignIn)
 
     // QC collection for file pairs
     FLAGSTAT(BWA.out.fs_in)

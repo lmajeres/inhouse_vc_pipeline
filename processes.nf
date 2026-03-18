@@ -116,10 +116,10 @@ process FLAGSTAT {
 process MERGEMD {
     cpus = params.threads_merge
     input:
-    tuple val(samp), path(bam_p), path(bam_1u), path(bam_2u)
+    tuple val(samp), val(dv_flag), path(bam_p), path(bam_1u), path(bam_2u)
 
     output:
-    tuple val(samp), path("${samp}_MD.bam"), emit: mdbam
+    tuple val(samp), val(dv_flag), path("${samp}_MD.bam"), emit: mdbam
     tuple val(samp), path("${samp}_MD.stat"), emit: mdstat
 
     script:
@@ -144,10 +144,10 @@ process MERGEMD {
 process XYRAT {
     cpus = params.threads_xy
     input:
-    tuple val(samp), path(mdbam)
+    tuple val(samp), val(dv_flag), path(mdbam)
     
     output:
-    tuple val(samp), path(mdbam), path("${samp}_MD.bam.bai"), env(SEX_CALL), emit: sexed_bam
+    tuple val(samp), val(dv_flag), path(mdbam), path("${samp}_MD.bam.bai"), env(SEX_CALL), emit: sexed_bam
     tuple val(samp), env(SEX_CALL), env(RATIO), emit: sex_qc
     
     script:
@@ -198,10 +198,10 @@ process XYRAT {
 
 process DEEPVARIANT {
     cpus = params.threads_dv
-    memory = params.mem_dv
+    memory = { dv_flag ? params.mem_dv_flag : params.mem_dv }
     maxForks = params.maxfork_dv
     input:
-    tuple val(samp), path(mdbam), path(index), val(sex)
+    tuple val(samp), val(dv_flag), path(mdbam), path(index), val(sex)
 
     output:
     tuple path("${samp}.g.vcf.gz"), path("${samp}.g.vcf.gz.tbi"), emit: gvcf

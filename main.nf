@@ -22,33 +22,27 @@ include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PA
 ============================*/
 
 @ValueObject
-class SEQ {
-    String raw_seq_id      // original file name
+class META {
+    String seq_file        // original associated file(s)
     String sample_id       // given sample id
-    String group           // directory containing files
+    String group_dir       // directory containing files
+    Boolean dv_flag        // flag marking sample as needing more memory for DeepVariant
     Integer warn           // Count of warnings accrued; starts at 0 and counts up if WARN is triggered. Currently unused.
-
-//    SEQ(String raw_seq_id, String sample_id, String group) {
-//        this.raw_seq_id = raw_seq_id
-//        this.sample_id  = sample_id
-//        this.group = group
-//        this.warn = 0
-//    }
 
 //    void flag() { this.warn += 1 }
 
 //    String describe() {
-//        return "SEQ(raw_seq_id=$raw_seq_id, sample_id=$sample_id, group=$group, warn=$warn)"
+//        return "META(seq_file=$seq_file, sample_id=$sample_id, group_dir=$group_dir, warn=$warn)"
 //    }
 }
-KryoHelper.register(SEQ)
+KryoHelper.register(META)
 
 def PARSE(csv) {
     def out = []
     new File(csv).eachLine { line, index ->
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
-        out << new SEQ(info[0], info[1], info[2], 0)
+        out << new META(info[0], info[1], info[2], info[3], 0)
     }
     return out
 }
@@ -59,49 +53,52 @@ def PARSE(csv) {
 
 workflow{
     main:
-    // Starts at run-level (multiple possible sequencing runs/libraries per sample, but doesn't consider technical reps (ie lanes))
-    SEQlist = PARSE("${params.inCsv}") // Needs a csv of files we want to parse! format as file_basename, sample_id, dir_of_group
+    if (!params.rawCsv && !params.bamCsv && !params.vcfCsv){
+        error "Need at least one input CSV (rawCsv, bamCsv, or vcfCsv)."
+    }
+
+    rawInChannel = params.rawCsv ? Channel.fromList(PARSE(params.rawCsv)) : Channel.empty()
+    bamInChannel = params.bamCsv ? Channel.fromList(PARSE(params.bamCsv)) : Channel.empty()
+    vcfInChannel = params.vcfCsv ? Channel.fromList(PARSE(params.vcfCsv)) : Channel.empty()
 
     // Fetch lanes
-    raw_pairs = Channel.fromList(SEQlist)
-        .map { SEQ ->
-            def r1s = file("${params.raws}/${SEQ.group}/${SEQ.raw_seq_id}_*_R1_001.fastq.gz")
+    rawPairs = rawInChannel.map { META ->
+            def r1s = file("${params.raws}/${META.group_dir}/${META.seq_file}_*_R1_001.fastq.gz")
             def lanes = r1s.collect { r1 ->
                 def match = (r1.name =~ /_L00(\d+)_R1_/)
                 def lane = match ? match[0][1] : "0" }
-            return [SEQ, r1s, lanes]
+            return [META, r1s, lanes]
         }
         .transpose() // Flatten from run level to file level
-        .map { SEQ, r1, lane ->
+        .map { META, r1, lane ->
             def r2 = file(r1.toString().replace('_R1_001.fastq.gz', '_R2_001.fastq.gz'))
-            def seq = SEQ.raw_seq_id
-            return [SEQ, seq, r1, r2, lane]
+            def seq = META.seq_file
+            return [META, seq, r1, r2, lane]
         }
 
     // Begin processing file pairs
     PETRIM(raw_pairs)
-    align_in = PETRIM.out.trims.map { SEQ, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane ->
-        def seq = SEQ.raw_seq_id
-        def samp = SEQ.sample_id
-        return [SEQ, seq, samp, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane]
+    align_in = PETRIM.out.trims.map { META, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane ->
+        def seq = META.seq_file
+        def samp = META.sample_id
+        return [META, seq, samp, trim_p_fwd, trim_p_rev, trim_u_fwd, trim_u_rev, lane]
     }
     BWA(align_in)
 
-    // QC collection for file pairs ** TODO: Test if this works
+    // QC collection for file pairs
     FLAGSTAT(BWA.out.fs_in)
-    trim_qc = PETRIM.out.tstat.map { SEQ, tstat_file, lane ->
-        def stats = tstat_file.text // get file
-        // extract info
+    trim_qc = PETRIM.out.tstat.map { META, tstat_file, lane ->
+        def stats = tstat_file.text
         def both_surv = (stats =~ /Both Surviving Reads: (\d+)/)[0][1] as Integer
         def both_surv_pct = (stats =~ /Both Surviving Read Percent: ([\d.]+)/)[0][1] as Double
         def fwd_pct = (stats =~ /Forward Only Surviving Read Percent: ([\d.]+)/)[0][1] as Double
         def rev_pct = (stats =~ /Reverse Only Surviving Read Percent: ([\d.]+)/)[0][1] as Double
         // construct hashmap
-        def key = "${SEQ.sample_id}_${SEQ.raw_seq_id}_${lane}"
+        def key = "${META.sample_id}_${META.seq_file}_${lane}"
         def qc_data = [
-            sample: SEQ.sample_id,
-            group: SEQ.group,
-            run: SEQ.raw_seq_id,
+            sample: META.sample_id,
+            group: META.group_dir,
+            run: META.seq_file,
             lane: lane,
             paired_survival_pct: both_surv_pct,
             r1_only_survival_pct: fwd_pct,
@@ -110,9 +107,9 @@ workflow{
         ]
         return [key, qc_data]
     }
-    flagstat_qc = FLAGSTAT.out.fs.map { SEQ, flagstat_file, lane ->
+    flagstat_qc = FLAGSTAT.out.fs.map { META, flagstat_file, lane ->
         def num_aligned_reads = (flagstat_file.text =~ /(\d+) \+ \d+ primary mapped/)[0][1] as Integer
-        def key = "${SEQ.sample_id}_${SEQ.raw_seq_id}_${lane}"
+        def key = "${META.sample_id}_${META.seq_file}_${lane}"
         def qc_data = [num_aligned_reads: num_aligned_reads]
         return [key, qc_data]
     }
@@ -123,34 +120,45 @@ workflow{
     }
 
     // Now we bring things to sample-level
-    merge_in = BWA.out.bams.map { SEQ, bam_p, bam_1u, bam_2u -> 
-            def samp = SEQ.sample_id
-            return [SEQ, samp, bam_p, bam_1u, bam_2u]
+    bamIn2Merge = bamInChannel.map { META ->
+        def samp = META.sample_id
+        def bam_p = file("${params.bams}/${META.group_dir}/${META.seq_file}_*_P.bam")
+        def bam_1u = file("${params.bams}/${META.group_dir}/${META.seq_file}_*_1U.bam")
+        def bam_2u = file("${params.bams}/${META.group_dir}/${META.seq_file}_*_2U.bam")
+        return [META, samp, bam_p, bam_1u, bam_2u]
+    }
+    merge_in = BWA.out.bams.map { META, bam_p, bam_1u, bam_2u -> 
+            def samp = META.sample_id
+            return [META, samp, bam_p, bam_1u, bam_2u]
         }
-        .groupTuple(by:1) // This will be a bottleneck in the pipeline, since it will have to wait until all bams are done to be sure it got them all
-        .map { SEQ, samp, bam_p, bam_1u, bam_2u ->
-            def sort_p = bam_p.sort { a,b ->
-                a.name.compareTo(b.name)
-            }
-            def sort_1u = bam_1u.sort { a,b ->
-                a.name.compareTo(b.name)
-            }
-            def sort_2u = bam_2u.sort { a,b ->
-                a.name.compareTo(b.name)
-            }
-            return [samp, sort_p, sort_1u, sort_2u]      
+        .mix(bamIn2Merge)
+        .groupTuple(by:1) // This is a bottleneck in the pipeline; it has to wait until all bams are done to be sure it got them all
+        .map { META, samp, bam_p, bam_1u, bam_2u ->
+            def dv_flag = META.any { it.dv_flag }
+            def sort_p = bam_p.flatten()
+                .sort { a,b -> a.name.compareTo(b.name) }
+            def sort_1u = bam_1u.flatten()
+                .sort { a,b -> a.name.compareTo(b.name) }
+            def sort_2u = bam_2u.flatten
+                .sort { a,b -> a.name.compareTo(b.name) }
+            return [samp, dv_flag, sort_p, sort_1u, sort_2u]      
         }
     MERGEMD(merge_in)
     XYRAT(MERGEMD.out.mdbam)
     DEEPVARIANT(XYRAT.out.sexed_bam)
-    gvcf_manifest = DEEPVARIANT.out.gvcf.map { gvcf_path, gvcf_index_path -> gvcf_path.toString() }
-        .collectFile(name: 'gvcf_manifest.txt', newLine: true) // We are unsure if this could cause a problem with resume but are going to not think about it right now :)
+    gvcf2JointCall = vcfInChannel.map { META ->
+            def gvcf_path = file("${params.vcfs}/${META.group_dir}/${META.seq_file}.g.vcf.gz")
+            def gvcf_index_path = file("${params.vcfs}/${META.group_dir}/${META.seq_file}.g.vcf.gz.tbi")
+            return [gvcf_path, gvcf_index_path]
+        }
+        .mix(DEEPVARIANT.out.gvcf)
+    gvcf_manifest = gvcf2JointCall.map { gvcf_path, gvcf_index_path -> gvcf_path.toString() }
+        .collectFile(name: 'gvcf_manifest.txt', newLine: true)
     GLNEXUS(gvcf_manifest)
 
     // QC collection for sample-level
     md_qc = MERGEMD.out.mdstat.map { samp, mdstat_file ->
-        def stats = mdstat_file.text // get file
-        // extract info
+        def stats = mdstat_file.text
         def exam = (stats =~ /EXAMINED: (\d+)/)[0][1] as Integer
         def cover = (exam*150.0)/params.genome_size
         def dups = (stats =~ /DUPLICATE TOTAL: (\d+)/)[0][1] as Integer

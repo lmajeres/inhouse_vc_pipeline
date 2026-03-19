@@ -42,6 +42,7 @@ def PARSE(csv) {
     new File(csv).eachLine { line, index ->
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
+        if (info.size() < 4) return // skip empty or malformed lines
         out << new META(info[0], info[1], info[2], info[3].toLowerCase()=="true", 0)
     }
     return out
@@ -139,7 +140,7 @@ workflow{
                 .sort { a,b -> a.name.compareTo(b.name) }
             def sort_1u = bam_1u.flatten()
                 .sort { a,b -> a.name.compareTo(b.name) }
-            def sort_2u = bam_2u.flatten
+            def sort_2u = bam_2u.flatten()
                 .sort { a,b -> a.name.compareTo(b.name) }
             return [samp, dv_flag, sort_p, sort_1u, sort_2u]      
         }

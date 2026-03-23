@@ -210,12 +210,23 @@ workflow{
     }
 
     publish:
-    unmerged_bams = BWA.out.bams // [metadata, [path_P, path_1U, path_2U]]
+    unmerged_bams = BWA.out.bams     // [metadata, [path_P, path_1U, path_2U]]
     final_bams = XYRAT.out.sexed_bam // [sample_id, path(mdbam), path(bai), sex call]
-    gvcfs = DEEPVARIANT.out.gvcf // [path(gvcf)]
-    bcf = GLNEXUS.out.bcf // [path(bcf)] (singular)
-    run_qc = file_qc.map { key, qc -> return qc} // hashmap indexed by run_lane_sample
-    samp_qc = samp2_qc.map { samp, qc -> return qc} // hashmap indexed by sample
+    gvcfs = DEEPVARIANT.out.gvcf     // [path(gvcf)]
+    bcf = GLNEXUS.out.bcf            // [path(bcf)] (singular)
+    run_qc = params.rawCsv           // hashmap indexed by run_lane_sample
+        ? file_qc.map { key, qc -> return qc }
+        : Channel.of([sample: "NA", group: "NA", run: "NA", lane: "NA", 
+                    paired_survival_pct: "NA", r1_only_survival_pct: "NA",
+                    r2_only_survival_pct: "NA", num_trim_pairs: "NA",
+                    num_aligned_reads: "NA", aligned_pct: "NA"])
+    samp_qc = (params.rawCsv || params.bamCsv)  // hashmap indexed by sample
+        ? samp2_qc.map { samp, qc -> return qc }
+        : Channel.of([sample: "NA", coverage: "NA", dup_pct: "NA", est_lib_size: "NA",
+                    sex_called: "NA", xy_ratio: "NA", total_variants: "NA",
+                    refcall_variants: "NA", nonrefcall_variants: "NA", pct_refcall: "NA",
+                    titv_ratio: "NA", mean_gq: "NA", median_gq: "NA",
+                    pct_gq_gt10: "NA", pct_gq_gt20: "NA", pct_gq_gt30: "NA"])
 }
 
 output{

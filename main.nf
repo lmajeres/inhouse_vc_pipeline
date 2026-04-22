@@ -42,7 +42,7 @@ def PARSE(csv) {
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
         if (info.size() < 5) return // skip empty or malformed lines
-        out << new META(info[0], info[1], info[2], info[3], info[4].toLowerCase()=="true", 0)
+        out << new META(info[0], info[1], info[2], info[3].toLowerCase()=="true", info[4].toLowerCase()=="true", 0)
     }
     return out
 }

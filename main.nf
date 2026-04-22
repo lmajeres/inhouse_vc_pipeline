@@ -13,8 +13,6 @@ import groovy.json.JsonOutput
 import nextflow.io.ValueObject
 import nextflow.util.KryoHelper
 
-nextflow.preview.output = true
-
 include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PARSE_DVQC } from './processes.nf'
 
  /*=============================

@@ -73,7 +73,9 @@ workflow{
         }
         .transpose() // Flatten from run level to file level
         .map { META, r1, lane ->
-            def r2 = file(r1.toString().replace('_R1_001.fastq.gz', '_R2_001.fastq.gz'))
+            def r2 = META.sra_flag
+                ? file(r1.toString().replace('_1.fastq.gz', '_2.fastq.gz'))
+                : file(r1.toString().replace('_R1_001.fastq.gz', '_R2_001.fastq.gz'))
             def seq = META.seq_file
             return [META, seq, r1, r2, lane]
         }

@@ -1,6 +1,6 @@
 process PETRIM {
-    cpus = params.threads_trim
-    maxForks = params.maxfork_trim
+    cpus { params.threads_trim }
+    maxForks { params.maxfork_trim }
     input:
     tuple val(SEQ), val(seq), path(fastq_r1), path(fastq_r2), val(lane)
         
@@ -37,9 +37,9 @@ process PETRIM {
 }
 
 process BWA {
-    cpus = params.threads_bwa
-    memory = params.mem_bwa
-    maxForks = params.maxfork_bwa
+    cpus { params.threads_bwa }
+    memory { params.mem_bwa }
+    maxForks { params.maxfork_bwa }
     input:
     tuple val(SEQ), val(seq), val(samp), path(trim_p_fwd), path(trim_p_rev), path(trim_u_fwd), path(trim_u_rev), val(lane)
 
@@ -97,7 +97,7 @@ process BWA {
 }
 
 process FLAGSTAT {
-    cpus = params.threads_fs
+    cpus { params.threads_fs }
     input:
     tuple val(SEQ), val(seq), path(pair_bam), val(lane)
 
@@ -114,7 +114,7 @@ process FLAGSTAT {
 }
 
 process MERGEMD {
-    cpus = params.threads_merge
+    cpus { params.threads_merge }
     input:
     tuple val(samp), val(dv_flag), path(bam_p), path(bam_1u), path(bam_2u)
 
@@ -142,7 +142,7 @@ process MERGEMD {
 }
 
 process XYRAT {
-    cpus = params.threads_xy
+    cpus { params.threads_xy }
     input:
     tuple val(samp), val(dv_flag), path(mdbam)
     
@@ -197,9 +197,9 @@ process XYRAT {
 // Possibly add metadata option to start w/ more mem for samples expected to be very different from ref.
 
 process DEEPVARIANT {
-    cpus = params.threads_dv
-    memory = { dv_flag ? params.mem_dv_flag : params.mem_dv }
-    maxForks = params.maxfork_dv
+    cpus { params.threads_dv }
+    memory { dv_flag ? params.mem_dv_flag : params.mem_dv }
+    maxForks { params.maxfork_dv }
     input:
     tuple val(samp), val(dv_flag), path(mdbam), path(index), val(sex)
 
@@ -261,8 +261,8 @@ process DEEPVARIANT {
 }
 
 process GLNEXUS {
-    cpus = params.threads_glnex
-    memory = params.mem_glnex
+    cpus { params.threads_glnex }
+    memory { params.mem_glnex }
 //  clusterOptions = '--nodelist=clrv1203' // This doesn't work
     input:
     path(manifest)
@@ -290,7 +290,7 @@ process GLNEXUS {
 }
 
 process PARSE_DVQC {
-    cpus = params.threads_dvqc
+    cpus { params.threads_dvqc }
     input:
     tuple val(samp), path(html)
 

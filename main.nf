@@ -43,7 +43,7 @@ def PARSE(csv) {
     new File(csv).eachLine { line, index ->
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
-        if (info.size() < 4) return // skip empty or malformed lines
+        if (info.size() < 5) return // skip empty or malformed lines
         out << new META(info[0], info[1], info[2], info[3], info[4].toLowerCase()=="true", 0)
     }
     return out
@@ -135,7 +135,7 @@ workflow{
             def samp = META.sample_id
             return [META, samp, bam_p, bam_1u, bam_2u]
             }
-    merge_in = (params.bamCsv ? bwa2Merge.mix(bamIn2Merge) : bwa2Merge})
+    merge_in = (params.bamCsv ? bwa2Merge.mix(bamIn2Merge) : bwa2Merge)
         .groupTuple(by:1) // This is a bottleneck in the pipeline; it has to wait until all bams are done to be sure it got them all
         .map { META, samp, bam_p, bam_1u, bam_2u ->
             def dv_flag = META.any { it.dv_flag }

@@ -27,6 +27,7 @@ class META {
     String sample_id       // given sample id
     String group_dir       // directory containing files
     Boolean dv_flag        // flag marking sample as needing more memory for DeepVariant
+    Boolean sra_flag       // flag marking if a sample is from SRA; changes the matching pattern we use vs in-house
     Integer warn           // Count of warnings accrued; starts at 0 and counts up if WARN is triggered. Currently unused.
 
 //    void flag() { this.warn += 1 }
@@ -43,7 +44,7 @@ def PARSE(csv) {
         if (index == 1) return // skip header
         def info = line.split(",").collect { it.trim() }
         if (info.size() < 4) return // skip empty or malformed lines
-        out << new META(info[0], info[1], info[2], info[3].toLowerCase()=="true", 0)
+        out << new META(info[0], info[1], info[2], info[3], info[4].toLowerCase()=="true", 0)
     }
     return out
 }
@@ -64,7 +65,9 @@ workflow{
 
     // Fetch lanes
     rawPairs = rawInChannel.map { META ->
-            def r1s = file("${params.raws}/${META.group_dir}/${META.seq_file}_*_R1_001.fastq.gz")
+            def r1s = META.sra_flag
+                ? file("${params.raws}/${META.group_dir}/${META.seq_file}_1.fastq.gz*")
+                : file("${params.raws}/${META.group_dir}/${META.seq_file}_*_R1_001.fastq.gz")
             def lanes = r1s.collect { r1 ->
                 def match = (r1.name =~ /_L00(\d+)_R1_/)
                 def lane = match ? match[0][1] : "0" }
@@ -128,11 +131,11 @@ workflow{
         def bam_2u = file("${params.bams}/${META.group_dir}/${META.seq_file}_*_2U.bam")
         return [META, samp, bam_p, bam_1u, bam_2u]
     }
-    merge_in = BWA.out.bams.map { META, bam_p, bam_1u, bam_2u -> 
+    bwa2Merge = BWA.out.bams.map { META, bam_p, bam_1u, bam_2u ->
             def samp = META.sample_id
             return [META, samp, bam_p, bam_1u, bam_2u]
-        }
-        .mix(bamIn2Merge)
+            }
+    merge_in = (params.bamCsv ? bwa2Merge.mix(bamIn2Merge) : bwa2Merge})
         .groupTuple(by:1) // This is a bottleneck in the pipeline; it has to wait until all bams are done to be sure it got them all
         .map { META, samp, bam_p, bam_1u, bam_2u ->
             def dv_flag = META.any { it.dv_flag }

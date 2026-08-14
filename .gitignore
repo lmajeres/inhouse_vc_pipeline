@@ -10,3 +10,4 @@ slurm*
 *.csv
 *.xlsx
 .vscode/
+REVIEW_NOTES.md

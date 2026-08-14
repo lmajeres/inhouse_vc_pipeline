@@ -13,7 +13,14 @@ import groovy.json.JsonOutput
 import nextflow.io.ValueObject
 import nextflow.util.KryoHelper
 
-include { PETRIM ; BWA ; FLAGSTAT ; MERGEMD ; XYRAT ; DEEPVARIANT ; GLNEXUS ; PARSE_DVQC } from './processes.nf'
+include { PETRIM } from './processes/PETRIM.nf'
+include { BWA } from './processes/BWA.nf'
+include { FLAGSTAT } from './processes/FLAGSTAT.nf'
+include { MERGEMD } from './processes/MERGEMD.nf'
+include { XYRAT } from './processes/XYRAT.nf'
+include { DEEPVARIANT } from './processes/DEEPVARIANT.nf'
+include { GLNEXUS } from './processes/GLNEXUS.nf'
+include { PARSE_DVQC } from './processes/PARSE_DVQC.nf'
 
  /*=============================
 /   Classes and Functions     /
@@ -38,11 +45,19 @@ KryoHelper.register(META)
 
 def PARSE(csv) {
     def out = []
+    def dvIdx = -1
+    def sraIdx = -1
     new File(csv).eachLine { line, index ->
-        if (index == 1) return // skip header
-        def info = line.split(",").collect { it.trim() }
-        if (info.size() < 5) return // skip empty or malformed lines
-        out << new META(info[0], info[1], info[2], info[3].toLowerCase()=="true", info[4].toLowerCase()=="true", 0)
+        def info = line.split(","),collect { it.trim()}
+        if (index == 1) {
+            dvIdx = info.findIndexOf { it.equalsIgnoreCase ("dv_flag") }
+            sraIdx = info.findIndexOf { it.equalsIgnoreCase ("sra_flag") }
+            return
+        }
+        if (info.size() < 3) return // mandatory fields missing, skip
+        def dv = (dvIdx >= 0 && dvIdx < info.size()) ? info[dvIdx].toLowerCase() == "true" : false
+        def sra = (sraIdx >= 0 && sraIdx < info.size()) ? info[sraIdx].toLowerCase() == "true" : false
+        out << new META(info[0], info[1], info[2], dv, sra, 0)
     }
     return out
 }
@@ -100,9 +115,9 @@ workflow{
         // construct hashmap
         def key = "${META.sample_id}_${META.seq_file}_${lane}"
         def qc_data = [
-            sample: META.sample_id,
-            group: META.group_dir,
-            run: META.seq_file,
+            sample_id: META.sample_id,
+            parent_dir: META.group_dir,
+            file_id: META.seq_file,
             lane: lane,
             paired_survival_pct: both_surv_pct,
             r1_only_survival_pct: fwd_pct,
@@ -170,7 +185,7 @@ workflow{
         def lib_size = (stats =~ /ESTIMATED_LIBRARY_SIZE: (\d+)/)[0][1] as Long
         // construct hashmap
         def qc_data = [
-            sample: samp,
+            sample_id: samp,
             coverage: cover,
             dup_pct: dup_rate,
             est_lib_size: lib_size
@@ -219,13 +234,13 @@ workflow{
     bcf = GLNEXUS.out.bcf            // [path(bcf)] (singular)
     run_qc = params.rawCsv           // hashmap indexed by run_lane_sample
         ? file_qc.map { key, qc -> return qc }
-        : Channel.of([sample: "NA", group: "NA", run: "NA", lane: "NA", 
+        : Channel.of([sample_id: "NA", parent_dir: "NA", file_id: "NA", lane: "NA", 
                     paired_survival_pct: "NA", r1_only_survival_pct: "NA",
                     r2_only_survival_pct: "NA", num_trim_pairs: "NA",
                     num_aligned_reads: "NA", aligned_pct: "NA"])
     samp_qc = (params.rawCsv || params.bamCsv)  // hashmap indexed by sample
         ? samp2_qc.map { samp, qc -> return qc }
-        : Channel.of([sample: "NA", coverage: "NA", dup_pct: "NA", est_lib_size: "NA",
+        : Channel.of([sample_id: "NA", coverage: "NA", dup_pct: "NA", est_lib_size: "NA",
                     sex_called: "NA", xy_ratio: "NA", total_variants: "NA",
                     refcall_variants: "NA", nonrefcall_variants: "NA", pct_refcall: "NA",
                     titv_ratio: "NA", mean_gq: "NA", median_gq: "NA",
